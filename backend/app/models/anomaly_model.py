@@ -32,7 +32,7 @@ def calculate_harshness(anomaly_count: int, total_logs: int) -> str:
 def predict_anomalies(
     collection: Collection,
     page: int = 1,
-    limit: int = 50,
+    limit: int = 10,
     model_path="data/trained_models/anomaly_model.pkl"
 ) -> Dict:
     """

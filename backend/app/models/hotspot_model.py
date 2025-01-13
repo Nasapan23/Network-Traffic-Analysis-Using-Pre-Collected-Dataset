@@ -1,21 +1,43 @@
-import pandas as pd
+from bson import ObjectId
 from collections import Counter
-import joblib
-import os
+import pandas as pd
+from pymongo.collection import Collection
+from typing import Dict
 
-def train_hotspot_model(csv_path="../../data/dataset.csv", model_path="../../data/trained_models/hotspot_model.pkl"):
-    # Ensure the output directory exists
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
-    
-    # Load dataset
-    data = pd.read_csv(csv_path)
-    
-    # Count destination frequencies
-    destination_counts = Counter(data['Destination'])
-    
-    # Save the destination counts
-    joblib.dump(destination_counts, model_path)
-    print(f"Hotspot model saved at {model_path}")
+def serialize_object_id(doc: Dict) -> Dict:
+    if '_id' in doc:
+        doc['_id'] = str(doc['_id'])
+    return doc
 
-if __name__ == "__main__":
-    train_hotspot_model()
+def hotspots_summary(collection: Collection) -> Dict:
+    data = list(collection.find())
+    df = pd.DataFrame(data)
+
+    if not all(field in df for field in ["Destination", "Source", "Length", "Protocol"]):
+        raise ValueError("Required fields ('Destination', 'Source', 'Length', 'Protocol') are missing from the logs collection.")
+
+    total_logs = int(len(df))
+    destination_counts = Counter(df['Destination'])
+    source_counts = Counter(df['Source'])
+    protocol_counts = Counter(df['Protocol'])
+
+    top_destinations = [{"Destination": dest, "Count": int(count), "Percentage": float((count / total_logs) * 100)}
+                        for dest, count in destination_counts.most_common(5)]
+    top_sources = [{"Source": src, "Count": int(count), "Percentage": float((count / total_logs) * 100)}
+                   for src, count in source_counts.most_common(5)]
+    top_protocols = [{"Protocol": proto, "Count": int(count), "Percentage": float((count / total_logs) * 100)}
+                     for proto, count in protocol_counts.most_common(5)]
+
+    length_stats = {
+        "avg_length": float(df['Length'].mean()),
+        "min_length": int(df['Length'].min()),
+        "max_length": int(df['Length'].max())
+    }
+
+    return {
+        "total_logs": total_logs,
+        "top_destinations": top_destinations,
+        "top_sources": top_sources,
+        "top_protocols": top_protocols,
+        "length_stats": length_stats
+    }
